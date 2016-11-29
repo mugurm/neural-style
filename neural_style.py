@@ -154,8 +154,8 @@ def imsave(path, img):
 
 
 def auto_output_filename(options):
-    content = os.path.basename(options.content)[:-4]
-    style = os.path.basename(options.styles[0])[:-4]
+    content, ext = os.path.splitext(os.path.basename(options.content))
+    style = os.path.splitext(os.path.basename(options.styles[0]))[0]
     name = ('{1}_'
             '{2}_'
             's{0.style_weight}_'
@@ -163,8 +163,8 @@ def auto_output_filename(options):
             't{0.tv_weight}_'
             'l{0.learning_rate}_'
             'i{0.iterations}'
-            '.jpg'
-            ).format(options, content, style)
+            '{3}'
+            ).format(options, content, style, ext)
     return name
 
 
