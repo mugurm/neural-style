@@ -100,8 +100,13 @@ def main():
         style_scale = STYLE_SCALE
         if options.style_scales is not None:
             style_scale = options.style_scales[i]
-        style_images[i] = scipy.misc.imresize(style_images[i], style_scale *
-                                              target_shape[1] / style_images[i].shape[1])
+
+        style_size = style_scale * target_shape[1] / style_images[i].shape[1]
+
+        if not options.style_scales:
+            options.style_scales = style_size
+
+        style_images[i] = scipy.misc.imresize(style_images[i], style_size)
 
     style_blend_weights = options.style_blend_weights
     if style_blend_weights is None:
@@ -151,6 +156,8 @@ def main():
 
         if output_file:
             imsave(output_file, image)
+
+        if not iteration:
             print "Created output at: {}".format(output_file)
 
 
@@ -169,6 +176,7 @@ def auto_output_filename(options):
     name = ('{1}_'
             '{2}_'
             's{0.style_weight}_'
+            'S{0.style_scales:4}_'
             'c{0.content_weight}_'
             't{0.tv_weight}_'
             'l{0.learning_rate}_'
