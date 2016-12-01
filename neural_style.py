@@ -18,6 +18,7 @@ LEARNING_RATE = 1e1
 STYLE_SCALE = 1.0
 ITERATIONS = 1000
 VGG_PATH = 'imagenet-vgg-verydeep-19.mat'
+OUT_DIR = "output"
 
 
 def build_parser():
@@ -38,6 +39,9 @@ def build_parser():
     parser.add_argument('--print-iterations', type=int,
                         dest='print_iterations', help='statistics printing frequency',
                         metavar='PRINT_ITERATIONS')
+    parser.add_argument('--checkpoint-buffer',
+                        dest='checkpoint_buffer', help='save iteration progress to single to single file',
+                        action='store_true', default=False)
     parser.add_argument('--checkpoint-output',
                         dest='checkpoint_output', help='checkpoint output format, e.g. output%%s.jpg',
                         metavar='OUTPUT')
@@ -134,11 +138,17 @@ def main():
         if iteration is not None:
             if options.checkpoint_output:
                 output_file = options.checkpoint_output % iteration
+            if options.checkpoint_buffer:
+                output_file = os.path.join(OUT_DIR, "000.jpg")
         else:
             if options.output:
                 output_file = options.output
             else:
+                if not os.path.exists(OUT_DIR):
+                    os.makedirs(OUT_DIR)
                 output_file = auto_output_filename(options)
+                output_file = os.path.join(OUT_DIR, output_file)
+
         if output_file:
             imsave(output_file, image)
             print "Created output at: {}".format(output_file)
