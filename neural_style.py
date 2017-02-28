@@ -58,7 +58,7 @@ def build_parser():
     parser.add_argument('--network',
                         dest='network', help='path to network parameters (default %(default)s)',
                         metavar='VGG_PATH', default=VGG_PATH)
-    parser.add_argument('--content-weight', type=float,
+    parser.add_argument('--content-weight', type=float, nargs="+",
                         dest='content_weight', help='content weight (default %(default)s)',
                         metavar='CONTENT_WEIGHT', default=CONTENT_WEIGHT)
     parser.add_argument('--style-weight', type=float,
@@ -70,7 +70,7 @@ def build_parser():
     parser.add_argument('--tv-weight', type=float,
                         dest='tv_weight', help='total variation regularization weight (default %(default)s)',
                         metavar='TV_WEIGHT', default=TV_WEIGHT)
-    parser.add_argument('--learning-rate', type=float,
+    parser.add_argument('--learning-rate', type=float, nargs="+",
                         dest='learning_rate', help='learning rate (default %(default)s)',
                         metavar='LEARNING_RATE', default=LEARNING_RATE)
     parser.add_argument('--initial',
@@ -96,26 +96,36 @@ def main():
                                     content_image.shape[1] * width)), width)
         content_image = scipy.misc.imresize(content_image, new_shape)
     target_shape = content_image.shape
-    for i in range(len(style_images)):
-        style_scale = STYLE_SCALE
-        if options.style_scales is not None:
-            style_scale = options.style_scales[i]
+    
 
-        style_size = style_scale * target_shape[1] / style_images[i].shape[1]
+    scale_images = []
+    if len(style_images) > 1:
+        for i in range(len(style_images)):
+            style_scale = STYLE_SCALE
+            if options.style_scales is not None:
+                style_scale = options.style_scales[i]
 
-        if not options.style_scales:
-            options.style_scales = style_size
+            style_size = style_scale * target_shape[1] / style_images[i].shape[1]
 
-        style_images[i] = scipy.misc.imresize(style_images[i], style_size)
+            if not options.style_scales:
+                options.style_scales = style_size
 
-    style_blend_weights = options.style_blend_weights
-    if style_blend_weights is None:
-        # default is equal weights
-        style_blend_weights = [1.0 / len(style_images) for _ in style_images]
-    else:
-        total_blend_weight = sum(style_blend_weights)
-        style_blend_weights = [weight / total_blend_weight
-                               for weight in style_blend_weights]
+            style_images[i] = scipy.misc.imresize(style_images[i], style_size)
+
+        style_blend_weights = options.style_blend_weights
+        if style_blend_weights is None:
+            # default is equal weights
+            style_blend_weights = [1.0 / len(style_images) for _ in style_images]
+        else:
+            total_blend_weight = sum(style_blend_weights)
+            style_blend_weights = [weight / total_blend_weight
+                                   for weight in style_blend_weights]
+    elif len(options.style_scales) > 1 and len(style_images) == 1:
+        style_blend_weights = []
+        for style_scale in options.style_scales:
+            style_size = style_scale * target_shape[1] / style_images[0].shape[1]
+            scale_images.append([scipy.misc.imresize(style_images[0], style_size), style_scale])
+            style_blend_weights.append(1.0)
 
     initial = options.initial
     if initial is not None:
@@ -125,40 +135,52 @@ def main():
         parser.error("To save intermediate images, the checkpoint output "
                      "parameter must contain `%s` (e.g. `foo%s.jpg`)")
 
-    for iteration, image in stylize(
-        network=options.network,
-        initial=initial,
-        content=content_image,
-        styles=style_images,
-        iterations=options.iterations,
-        content_weight=options.content_weight,
-        style_weight=options.style_weight,
-        style_blend_weights=style_blend_weights,
-        tv_weight=options.tv_weight,
-        learning_rate=options.learning_rate,
-        print_iterations=options.print_iterations,
-        checkpoint_iterations=options.checkpoint_iterations
-    ):
-        output_file = None
-        if iteration is not None:
-            if options.checkpoint_output:
-                output_file = options.checkpoint_output % iteration
-            if options.checkpoint_buffer:
-                output_file = os.path.join(OUT_DIR, "000.jpg")
-        else:
-            if options.output:
-                output_file = options.output
-            else:
-                if not os.path.exists(OUT_DIR):
-                    os.makedirs(OUT_DIR)
-                output_file = auto_output_filename(options)
-                output_file = os.path.join(OUT_DIR, output_file)
+    for scale_image in scale_images:
+        for learning_rate in options.learning_rate:
+            for content_weight in options.content_weight:
 
-        if output_file:
-            imsave(output_file, image)
+                for iteration, image in stylize(
+                    network=options.network,
+                    initial=initial,
+                    content=content_image,
+                    styles=[scale_image[0]],
+                    iterations=options.iterations,
+                    content_weight=content_weight,
+                    style_weight=options.style_weight,
+                    style_blend_weights=style_blend_weights,
+                    tv_weight=options.tv_weight,
+                    learning_rate=learning_rate,
+                    print_iterations=options.print_iterations,
+                    checkpoint_iterations=options.checkpoint_iterations
+                ):
+                    output_file = None
+                    if iteration is not None:
+                        if options.checkpoint_output:
+                            output_file = options.checkpoint_output % iteration
+                        if options.checkpoint_buffer:
+                            output_file = os.path.join(OUT_DIR, "000.jpg")
+                    else:
+                        if options.output:
+                            output_file = options.output
+                        else:
+                            if not os.path.exists(OUT_DIR):
+                                os.makedirs(OUT_DIR)
 
-        if not iteration:
-            print "Created output at: {}".format(output_file)
+                            # load the correct parameters for this run
+                            import copy
+                            iteration_options = copy.deepcopy(options)
+                            iteration_options.content_weight = content_weight
+                            iteration_options.learning_rate = learning_rate
+                            iteration_options.style_scale = scale_image[1]
+
+                            output_file = auto_output_filename(iteration_options)
+                            output_file = os.path.join(OUT_DIR, output_file)
+
+                    if output_file:
+                        imsave(output_file, image)
+
+                    if not iteration:
+                        print "Created output at: {}".format(output_file)
 
 
 def imread(path):
@@ -176,7 +198,7 @@ def auto_output_filename(options):
     name = ('{1}_'
             '{2}_'
             's{0.style_weight}_'
-            'S{0.style_scales:4}_'
+            'S{0.style_scale}_'
             'c{0.content_weight}_'
             't{0.tv_weight}_'
             'l{0.learning_rate}_'
