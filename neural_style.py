@@ -99,7 +99,13 @@ def main():
     
 
     scale_images = []
-    if len(style_images) > 1:
+    if len(options.style_scales) > 1 and len(style_images) == 1:
+        style_blend_weights = []
+        for style_scale in options.style_scales:
+            style_size = style_scale * target_shape[1] / style_images[0].shape[1]
+            scale_images.append([scipy.misc.imresize(style_images[0], style_size), style_scale])
+            style_blend_weights.append(1.0)
+    else:
         for i in range(len(style_images)):
             style_scale = STYLE_SCALE
             if options.style_scales is not None:
@@ -111,6 +117,7 @@ def main():
                 options.style_scales = style_size
 
             style_images[i] = scipy.misc.imresize(style_images[i], style_size)
+            scale_images.append([style_images[i], style_scale])
 
         style_blend_weights = options.style_blend_weights
         if style_blend_weights is None:
@@ -120,12 +127,6 @@ def main():
             total_blend_weight = sum(style_blend_weights)
             style_blend_weights = [weight / total_blend_weight
                                    for weight in style_blend_weights]
-    elif len(options.style_scales) > 1 and len(style_images) == 1:
-        style_blend_weights = []
-        for style_scale in options.style_scales:
-            style_size = style_scale * target_shape[1] / style_images[0].shape[1]
-            scale_images.append([scipy.misc.imresize(style_images[0], style_size), style_scale])
-            style_blend_weights.append(1.0)
 
     initial = options.initial
     if initial is not None:
